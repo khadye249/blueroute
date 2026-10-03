@@ -293,7 +293,7 @@
     $form.data('busy', busy).attr('aria-busy', busy ? 'true' : 'false');
     $form.find('.btn-submit').prop('disabled', busy).toggleClass('is-loading', busy);
   }
-  function showAlert($form, html) { $form.find('.form-alert').removeClass('d-none').html(html); }
+  function showAlert($form, html, handoff) { $form.find('.form-alert').toggleClass('is-handoff', !!handoff).removeClass('d-none').html(html); }
   function failMessage(payload) {
     var txt = 'Hi ' + CFG.brand + ', I tried to book online. ' + (payload.from ? 'Trip: ' + payload.from + ' to ' + payload.to + '. ' : '') +
       'Name: ' + (payload.name || '') + ', Mobile: ' + (payload.mobile || '');
@@ -364,7 +364,7 @@
       e.preventDefault();
       var $form = $(this);
       if ($form.data('busy')) { return; }
-      $form.find('.form-alert').addClass('d-none').empty();
+      $form.find('.form-alert').removeClass('is-handoff').addClass('d-none').empty();
       if (validateForm($form)) { return; }
       var payload = collect($form);
       if ($form.find('[name=website]').val()) { onSuccess($form, payload, {}); return; } // honeypot: silently drop
@@ -381,22 +381,21 @@
           showAlert($form, 'Your browser blocked WhatsApp. <a href="' + waUrl + '" target="_blank" rel="noopener">Tap here to send your request on WhatsApp</a>.');
           return;
         }
-        setBusy($form, true);
-        window.setTimeout(function () { var keep = onSuccess($form, payload, { ref: makeRef() }); if (!keep) { setBusy($form, false); } }, 400);
+        showAlert($form, '<strong>WhatsApp opened.</strong> Tap Send there to complete your request.', true);
         return;
       }
       setBusy($form, true);
       var keepBusy = false;
       submitLead(payload)
         .done(function (res) { keepBusy = onSuccess($form, payload, res); })
-        .fail(function (xhr) { if (mode === 'both' && waWin) { keepBusy = onSuccess($form, payload, { ref: makeRef() }); } else { onFail($form, payload, xhr); } })
+        .fail(function (xhr) { if (mode === 'both' && waWin) { showAlert($form, '<strong>WhatsApp opened.</strong> The online request could not be saved, so tap Send there to complete it.', true); } else { onFail($form, payload, xhr); } })
         .always(function () { if (!keepBusy) { setBusy($form, false); } });
     });
     var $m = $('#callbackModal');
     $m.on('hidden.bs.modal', function () {
       $m.find('form').removeClass('d-none')[0].reset();
       $m.find('.lead-success').addClass('d-none');
-      $m.find('.form-alert').addClass('d-none').empty();
+      $m.find('.form-alert').removeClass('is-handoff').addClass('d-none').empty();
       $m.find('[data-rules]').each(function () { clearError($(this)); });
     });
     $m.on('shown.bs.modal', function () { $m.find('input[name=name]').trigger('focus'); });
@@ -409,8 +408,8 @@
     var $f = $('#bookingForm');
     if (!$f.length) { return; }
     var $from = $('#from'), $to = $('#to'), $veh = $('#vehicle'), $pax = $('#pax'), $date = $('#date'), $ret = $('#returnDate');
-    var $fare = $('#fareBox'), $hint = $('#tripHint'), $vHint = $('#vehicleHint');
-    var trip = 'oneway', timer = null, seq = 0;
+    var $fare = $('#fareBox'), $hint = $('#tripHint'), $vHint = $('#vehicleHint'), $airportNotice = $('#airportNotice');
+    var trip = 'oneway', timer = null, seq = 0, airportUndo = null;
     var HINTS = {
       oneway: 'One way: pay for a single leg only - no return charges.',
       round: 'Round trip: stay as long as you like. Billed on the greater of actual km or ' + D.policy.minRoundPerDay + ' km/day.',
@@ -428,11 +427,12 @@
     function ensureAirportField() {
       var $air = dir() === 'from' ? $from : $to, $other = dir() === 'from' ? $to : $from;
       var p = placeOf($air);
-      if (p && p.type === 'airport') { return; }
+      if (p && p.type === 'airport') { return ''; }
       var o = placeOf($other);
       var puneish = o && (o.id === 'pune' || /pune/i.test(o.name));
       setPlace($air, puneish ? 'pune-airport' : 'mumbai-airport');
       clearError($air);
+      return (dir() === 'from' ? 'Pickup' : 'Drop') + ' changed to ' + $air.val() + '.';
     }
     function applyLabels() {
       if (trip === 'airport') {
@@ -441,12 +441,18 @@
       } else { $('#fromLabel').text('Pickup'); $('#toLabel').text('Drop'); }
     }
     function setTrip(t) {
+      var previousTrip = trip;
+      if (t === 'airport' && previousTrip !== 'airport') {
+        airportUndo = { trip: previousTrip, from: $from.val(), fromId: $from.data('place'), to: $to.val(), toId: $to.data('place') };
+      }
       trip = t;
       $f.find('[name=trip][value=' + t + ']').prop('checked', true);
       $('.js-round-only').toggleClass('d-none', t !== 'round');
       $('.js-airport-only').toggleClass('d-none', t !== 'airport');
       $hint.text(HINTS[t]);
-      if (t === 'airport') { ensureAirportField(); }
+      var airportChange = t === 'airport' ? ensureAirportField() : '';
+      if (airportChange) { $airportNotice.removeClass('d-none').find('span').text(airportChange); }
+      else if (t !== 'airport') { $airportNotice.addClass('d-none'); }
       applyLabels();
       $f.find('.is-invalid').each(function () { validateField($(this)); });
       schedule();
@@ -523,21 +529,6 @@
     }
     function schedule() { window.clearTimeout(timer); timer = window.setTimeout(updateFare, 140); }
 
-    /* ----- WhatsApp prefilled booking ----- */
-    function waText() {
-      var q = BOOKING.lastQuote, v = F.vehicleById[$veh.val()];
-      var lines = ['Hi ' + CFG.brand + ', I would like to book a cab.',
-        'Trip type: ' + ({ oneway: 'One way', round: 'Round trip', airport: 'Airport transfer' })[trip],
-        'Pickup: ' + ($from.val() || '-'), 'Drop: ' + ($to.val() || '-'),
-        'Date: ' + ($date.val() ? fmtDate($date.val()) : '-') + ' ' + fmtTime($('#time').val()),
-        'Vehicle: ' + (v ? v.name : '-') + ', Passengers: ' + $pax.val()];
-      if (trip === 'round' && $ret.val()) { lines.splice(4, 0, 'Return: ' + fmtDate($ret.val())); }
-      if (q) { lines.push('Estimated fare: Rs ' + F.inr(q.total)); }
-      if ($('#name').val()) { lines.push('Name: ' + $('#name').val()); }
-      return lines.join('\n');
-    }
-    $doc.on('click', '.js-wa-booking', function () { $(this).attr('href', waLink(waText())); });
-
     /* ----- events ----- */
     $f.on('change', '[name=trip]', function () { setTrip(this.value); track('trip_type_change', { trip: this.value }); });
     $f.on('change', '[name=airportDir]', function () {
@@ -550,6 +541,13 @@
       applyLabels(); schedule();
     });
     $('#swapBtn').on('click', swap);
+    $('#airportUndo').on('click', function () {
+      if (!airportUndo) { return; }
+      function restore($in, value, id) { $in.val(value); if (id) { $in.data('place', id); } else { $in.removeData('place'); } }
+      restore($from, airportUndo.from, airportUndo.fromId); restore($to, airportUndo.to, airportUndo.toId);
+      var oldTrip = airportUndo.trip; airportUndo = null; setTrip(oldTrip);
+      $airportNotice.addClass('d-none');
+    });
     $from.add($to).on('brc:place change', schedule);
     $pax.on('change', function () { ensureVehicleFits(); schedule(); });
     $veh.on('change', function () {
@@ -582,8 +580,9 @@
   $.fn.brcCarousel = function () {
     return this.each(function () {
       var $c = $(this), $t = $c.find('.carousel-track'), $slides = $t.children(), $dots = $c.find('.car-dots');
-      var $prev = $c.find('.car-prev'), $next = $c.find('.car-next');
-      var auto = +$c.data('autoplay') || 0, timer = null, paused = false, pages = 1, page = 0, tick;
+      var $prev = $c.find('.car-prev'), $next = $c.find('.car-next'), $toggle = $c.find('.car-toggle');
+      var auto = +$c.data('autoplay') || 0, timer = null, interactionPaused = false;
+      var userPaused = auto ? store.get('brc_carousel_paused') === '1' : false, pages = 1, page = 0, tick;
       function perView() { var w = $slides.first().outerWidth(true) || 1; return Math.max(1, Math.round($t[0].clientWidth / w)); }
       function build() {
         var pv = perView(); pages = Math.max(1, Math.ceil($slides.length / pv));
@@ -617,11 +616,13 @@
       $t.on('keydown', function (e) { if (e.key === 'ArrowRight') { step(1); } else if (e.key === 'ArrowLeft') { step(-1); } });
       $win.on('resize', function () { window.clearTimeout(tick); tick = window.setTimeout(build, 150); });
       if (auto && !RM) {
-        var start = function () { stop(); timer = window.setInterval(function () { if (!paused && !document.hidden) { step(1); } }, auto); };
+        var updateToggle = function () { $toggle.attr({ 'aria-pressed': userPaused ? 'true' : 'false', 'aria-label': userPaused ? 'Play automatic slides' : 'Pause automatic slides' }).text(userPaused ? 'Play' : 'Pause'); };
+        var start = function () { stop(); timer = window.setInterval(function () { if (!userPaused && !interactionPaused && !document.hidden) { step(1); } }, auto); };
         var stop = function () { if (timer) { window.clearInterval(timer); timer = null; } };
-        $c.on('mouseenter focusin touchstart', function () { paused = true; }).on('mouseleave focusout touchend', function () { paused = false; });
-        start();
-      }
+        $c.on('mouseenter focusin touchstart', function () { interactionPaused = true; }).on('mouseleave focusout touchend', function () { interactionPaused = false; });
+        $toggle.on('click', function () { userPaused = !userPaused; store.set('brc_carousel_paused', userPaused ? '1' : '0'); updateToggle(); });
+        updateToggle(); start();
+      } else { $toggle.addClass('d-none'); }
       build();
     });
   };

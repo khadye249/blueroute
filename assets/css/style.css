@@ -40,8 +40,8 @@
 }
 
 /* ---------- 2. Base ---------- */
-html { scroll-padding-top: 96px; }
-body { color: var(--dark); background: #fff; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html { scroll-padding-top: 96px; overflow-x: clip; }
+body { color: var(--dark); background: #fff; overflow-x: clip; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 @media (max-width: 991.98px) { body { padding-bottom: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom)); } }
 img { max-width: 100%; height: auto; }
 h1, h2, h3, h4 { font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
@@ -187,6 +187,9 @@ a { text-underline-offset: 3px; }
 .swap-btn .icon { transform: rotate(90deg); }
 @media (min-width: 768px) { .swap-btn { left: 50%; right: auto; top: 2.45rem; transform: translateX(-50%); } .swap-btn .icon { transform: none; } }
 .form-alert { background: #FEF3F2; border: 1px solid #FECDCA; color: #7A271A; border-radius: 10px; padding: .75rem 1rem; font-size: .9rem; margin: .75rem 0; }
+.form-alert.is-handoff { background: var(--success-50); border-color: #A6DDB3; color: #155C27; }
+.airport-notice { display: flex; align-items: center; justify-content: space-between; gap: .75rem; background: var(--brand-50); color: var(--brand-900); border-radius: 8px; padding: .55rem .7rem; font-size: .82rem; margin: -.25rem 0 .85rem; }
+.airport-notice button { border: 0; background: transparent; color: var(--brand); font-weight: 800; text-decoration: underline; text-underline-offset: 2px; padding: .2rem; white-space: nowrap; }
 .booking-alt { display: flex; gap: .6rem; margin-top: .75rem; }
 .booking-trust { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem 1rem; padding: 0; margin: .85rem 0 0; font-size: .78rem; color: var(--muted); }
 .booking-trust li { display: inline-flex; align-items: center; gap: .3rem; }
@@ -283,6 +286,8 @@ a { text-underline-offset: 3px; }
 .car-dots { display: flex; gap: .45rem; }
 .car-dot { width: 10px; height: 10px; border-radius: 50%; border: 0; background: #c5cfdc; padding: 0; transition: width .2s, background .2s; }
 .car-dot.is-on { background: var(--accent); width: 26px; border-radius: 6px; }
+.car-toggle { border: 1px solid var(--line); background: #fff; color: var(--brand); border-radius: 999px; padding: .4rem .7rem; font-size: .8rem; font-weight: 700; }
+.car-toggle:hover { background: var(--brand-50); }
 
 /* fleet */
 .fleet-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; height: 100%; transition: box-shadow .2s, border-color .2s; }
