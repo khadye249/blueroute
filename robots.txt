@@ -3,4 +3,4 @@ Allow: /
 Disallow: /booking-confirmation/
 Disallow: /api/
 
-Sitemap: https://www.blueroutecabs.in/sitemap.xml
+Sitemap: https://khadye249.github.io/blueroute/sitemap.xml
