@@ -381,6 +381,7 @@
           showAlert($form, 'Your browser blocked WhatsApp. <a href="' + waUrl + '" target="_blank" rel="noopener">Tap here to send your request on WhatsApp</a>.');
           return;
         }
+        $form.removeClass('d-none').closest('.modal-body, .callback-inner, .lead-wrap').find('.lead-success').addClass('d-none');
         showAlert($form, '<strong>WhatsApp opened.</strong> Tap Send there to complete your request.', true);
         return;
       }
