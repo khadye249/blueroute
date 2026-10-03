@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /booking-confirmation/
+Disallow: /api/
+
+Sitemap: https://www.blueroutecabs.in/sitemap.xml
